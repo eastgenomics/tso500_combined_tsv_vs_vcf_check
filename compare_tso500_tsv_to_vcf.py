@@ -79,6 +79,47 @@ def read_vcf(vcf):
     return df
 
 
+def match_tsvs_and_vcfs(files):
+    """
+    Match tsvs and vcfs for samples from list of files in directory.
+
+    Works based off prefix of filename of both tsv and vcf
+    """
+    tsvs = sorted([x for x in files if x.endswith('.tsv')])
+    vcfs = sorted([x for x in files if x.endswith('.vcf.gz')])
+
+    # we expect tsvs to be named as SAMPLE1_CominedVariantOutput.tsv and
+    # vcfs to be named SAMPLE1-more-fields.vcf.gz, therefore match on the
+    # sample ID from both
+    tsv_prefixes = [Path(x).name.split('_')[0] for x in tsvs]
+    vcf_prefixes = [Path(x).name.split('-')[0] for x in vcfs]
+
+
+    # get the samples that have both tsvs and vcfs to compare
+    common = list(set(tsv_prefixes) & set(vcf_prefixes))
+    tsvs = [x for x in tsvs if Path(x).name.split('_')[0] in common]
+    vcfs = [x for x in vcfs if Path(x).name.split('-')[0] in common]
+
+    return tsvs, vcfs
+
+
+def get_mismatch_variants(tsv_df, vcf_df):
+    """
+    Get variants that are mismatched (i.e. unique to tsv or vcf)
+    """
+    # get variants present only in tsv and vcf
+    merge_cols = ['CHROM', 'POS', 'REF', 'ALT']
+    tsv_only = tsv_df.merge(
+        vcf_df[merge_cols], on=merge_cols, how='outer', indicator=True
+        ).loc[lambda x: x.pop('_merge').eq('left_only')]
+
+    vcf_only = vcf_df.merge(
+        tsv_df[merge_cols], on=merge_cols, how='outer', indicator=True
+        ).loc[lambda x: x.pop('_merge').eq('left_only')]
+
+    return tsv_only, vcf_only
+
+
 def main():
 
     # should be a directory of individual run directories
@@ -99,20 +140,7 @@ def main():
 
         files = [os.path.join(run_dir, x) for x in os.listdir(run_dir)]
 
-        tsvs = sorted([x for x in files if x.endswith('.tsv')])
-        vcfs = sorted([x for x in files if x.endswith('.vcf.gz')])
-
-        # we expect tsvs to be named as SAMPLE1_CominedVariantOutput.tsv and
-        # vcfs to be named SAMPLE1-more-fields.vcf.gz, therefore match on the
-        # sample ID from both
-        tsv_prefixes = [Path(x).name.split('_')[0] for x in tsvs]
-        vcf_prefixes = [Path(x).name.split('-')[0] for x in vcfs]
-
-
-        # get the samples that have both tsvs and vcfs to compare
-        common = list(set(tsv_prefixes) & set(vcf_prefixes))
-        tsvs = [x for x in tsvs if Path(x).name.split('_')[0] in common]
-        vcfs = [x for x in vcfs if Path(x).name.split('-')[0] in common]
+        tsvs, vcfs = match_tsvs_and_vcfs(files)
 
         # empty dfs to add all mismatches to
         all_tsv_only = pd.DataFrame(
@@ -151,15 +179,7 @@ def main():
             tsv_df = read_tsv(tsv)
             vcf_df = read_vcf(vcf)
 
-            # get variants present only in tsv and vcf
-            merge_cols = ['CHROM', 'POS', 'REF', 'ALT']
-            tsv_only = tsv_df.merge(
-                vcf_df[merge_cols], on=merge_cols, how='outer', indicator=True
-                ).loc[lambda x: x.pop('_merge').eq('left_only')]
-
-            vcf_only = vcf_df.merge(
-                tsv_df[merge_cols], on=merge_cols, how='outer', indicator=True
-                ).loc[lambda x: x.pop('_merge').eq('left_only')]
+            tsv_only, vcf_only = get_mismatch_variants(tsv_df, vcf_df)
 
             # get any rows only in VCF AND not rescued in rescue app
             vcf_only = vcf_only[~vcf_only['FILTER'].str.contains('OPA')]
@@ -226,7 +246,7 @@ def main():
     print(f"Total runs checked: {runs}")
     print(f"Total tsv mismatch: {all_tsv_issues}")
     print(f"Total vcf mismatch: {all_vcf_issues}")
-    print(f"Total tsv variants w/ no annotation: {len(all_tsv_no_annotation.index)}")
+    print(f"Total tsv variants w/ no annotation: {all_no_annotation_issues}")
 
 if __name__ == "__main__":
     main()
