@@ -1,3 +1,16 @@
+"""
+Script to compare CombinedVariantOutput tsv files against compressed VCFs to
+identify variants unique to either.
+
+This takes a directory of directories as input (one per run), containing all
+vcfs and tsvs together.
+
+Will output up to 3 files:
+    - all_tsv_only.tsv => original entries of variants only found in the tsvs
+    - all_vcf_only.tsv => original entries of variants only found in the vcfs
+    - all_tsv_no_annotation.tsv => original entires of variants in the tsvs
+        for which there is no annotation and are not compared
+"""
 import gzip
 import os
 from pathlib import Path
@@ -8,7 +21,7 @@ import pandas as pd
 
 def read_tsv(tsv):
     """
-    Read in CombinedVariantOutput.tsv
+    Read in CombinedVariantOutput.tsv to a dataframe
     """
     variants = []
 
@@ -46,7 +59,7 @@ def read_tsv(tsv):
 
 def read_vcf(vcf):
     """
-    Read in compressed VEP VCF
+    Read in compressed VCF to a dataframe
     """
     with gzip.open(vcf) as fh:
         # get column names
@@ -89,20 +102,24 @@ def main():
         tsvs = sorted([x for x in files if x.endswith('.tsv')])
         vcfs = sorted([x for x in files if x.endswith('.vcf.gz')])
 
-        # get the samples that have both tsvs and vcfs to compare
+        # we expect tsvs to be named as SAMPLE1_CominedVariantOutput.tsv and
+        # vcfs to be named SAMPLE1-more-fields.vcf.gz, therefore match on the
+        # sample ID from both
         tsv_prefixes = [Path(x).name.split('_')[0] for x in tsvs]
         vcf_prefixes = [Path(x).name.split('-')[0] for x in vcfs]
 
-        common = list(set(tsv_prefixes) & set(vcf_prefixes))
 
+        # get the samples that have both tsvs and vcfs to compare
+        common = list(set(tsv_prefixes) & set(vcf_prefixes))
         tsvs = [x for x in tsvs if Path(x).name.split('_')[0] in common]
         vcfs = [x for x in vcfs if Path(x).name.split('-')[0] in common]
 
         # empty dfs to add all mismatches to
         all_tsv_only = pd.DataFrame(
             columns=[
-                'Sample', 'Gene', 'CHROM', 'POS', 'REF', 'ALT', 'Allele Frequency', 'Depth',
-                'P-Dot Notation', 'C-Dot Notation', 'Consequence(s)', 'Affected Exon(s)'
+                'Sample', 'Gene', 'CHROM', 'POS', 'REF', 'ALT',
+                'Allele Frequency', 'Depth', 'P-Dot Notation',
+                'C-Dot Notation', 'Consequence(s)', 'Affected Exon(s)'
             ]
         )
 
@@ -117,8 +134,9 @@ def main():
         # add these to their own df to write to a separate file
         all_tsv_no_annotation = pd.DataFrame(
             columns=[
-                'Sample', 'Gene', 'CHROM', 'POS', 'REF', 'ALT', 'Allele Frequency', 'Depth',
-                'P-Dot Notation', 'C-Dot Notation', 'Consequence(s)', 'Affected Exon(s)'
+                'Sample', 'Gene', 'CHROM', 'POS', 'REF', 'ALT',
+                'Allele Frequency', 'Depth', 'P-Dot Notation',
+                'C-Dot Notation', 'Consequence(s)', 'Affected Exon(s)'
             ]
         )
 
@@ -157,6 +175,7 @@ def main():
             tsv_only = tsv_only[~tsv_only['Gene'].str.upper().isin(genes)]
 
             # remove variants with no annotation => weird Illumina variants
+            # add these to their own dataframe to dump out at the end
             no_annotation_only = tsv_only[tsv_only['Gene'] == '']
             tsv_only = tsv_only[tsv_only['Gene'] != '']
 
