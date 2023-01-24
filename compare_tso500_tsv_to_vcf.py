@@ -22,6 +22,16 @@ import pandas as pd
 def read_tsv(tsv):
     """
     Read in CombinedVariantOutput.tsv to a dataframe
+
+    Parameters
+    ----------
+    tsv : str
+        path to tsv file to read in
+    
+    Returns
+    -------
+    pd.DataFrame
+        dataframe of SNVs read in from CombinedVariantOutput tsv
     """
     variants = []
 
@@ -60,6 +70,16 @@ def read_tsv(tsv):
 def read_vcf(vcf):
     """
     Read in compressed VCF to a dataframe
+
+    Parameters
+    ----------
+    vcf : str
+        path to vcf file to read in
+
+    Returns
+    -------
+    pd.DataFrame
+        dataframe of variants read from vcf
     """
     with gzip.open(vcf) as fh:
         # get column names
@@ -84,6 +104,18 @@ def match_tsvs_and_vcfs(files):
     Match tsvs and vcfs for samples from list of files in directory.
 
     Works based off prefix of filename of both tsv and vcf
+
+    Parameters
+    ----------
+    files : list
+        glob list of tsv and vcf files from a given dir
+
+    Returns
+    -------
+    tsvs : list
+        list of tsv files
+    vcfs : list
+        list of vcf files
     """
     tsvs = sorted([x for x in files if x.endswith('.tsv')])
     vcfs = sorted([x for x in files if x.endswith('.vcf.gz')])
@@ -106,6 +138,20 @@ def match_tsvs_and_vcfs(files):
 def get_mismatch_variants(tsv_df, vcf_df):
     """
     Get variants that are mismatched (i.e. unique to tsv or vcf)
+
+    Parameters
+    ----------
+    tsv_df : pd.DataFrame
+        df of variants from tsv
+    vcf_df : pd.DataFrame
+        df of variants from vcf
+
+    Returns
+    -------
+    tsv_only : pd.DataFrame
+        df of variants present only in the tsv (i.e. missing from the vcf)
+    vcf_only : pd.DataFrame
+        df of variants present only in the vcf (i.e. missing from the tsv)
     """
     # get variants present only in tsv and vcf
     merge_cols = ['CHROM', 'POS', 'REF', 'ALT']
@@ -134,9 +180,12 @@ def main():
 
     for run_dir in os.listdir(all_runs_dir):
         run_dir = os.path.join(all_runs_dir, run_dir)
+        run_name = run_dir.split('/')[-1]
         if not os.path.isdir(run_dir):
             # in case of any bonus files that aren't directories
             continue
+
+        print(f"\nChecking run {run_name} ({run_dir})")
 
         files = [os.path.join(run_dir, x) for x in os.listdir(run_dir)]
 
@@ -181,18 +230,12 @@ def main():
 
             tsv_only, vcf_only = get_mismatch_variants(tsv_df, vcf_df)
 
-            # get any rows only in VCF AND not rescued in rescue app
+            # get any rows only in VCF AND not rescued in rescue app as
+            # we know these will only be in the vcf since we are rescuing them
+            # v1.0.0 reports workflow => tagged 'OPA'
+            # v1.1.0 reports workflow => tagged 'rescued'
             vcf_only = vcf_only[~vcf_only['FILTER'].str.contains('OPA')]
-
-            # genes we know are missing to drop from CombinedVariantOutput
-            genes = [
-                'CEBPA', 'CSNK1A1', 'DDX41', 'DNAJB1', 'FAM46C', 'FOXL2', 'H3F3C',
-                'HIST1H3H', 'HNRNPK', 'JUN', 'MAP4K3', 'MSI', 'PHF6', 'SLC7A8',
-                'SMC1A', 'SMC3', 'SOX2', 'STAG1', 'STT3A', 'ZNF2'
-            ]
-
-            # remove variants in genes we know we miss
-            tsv_only = tsv_only[~tsv_only['Gene'].str.upper().isin(genes)]
+            vcf_only = vcf_only[~vcf_only['FILTER'].str.contains('rescued')]
 
             # remove variants with no annotation => weird Illumina variants
             # add these to their own dataframe to dump out at the end
@@ -200,17 +243,23 @@ def main():
             tsv_only = tsv_only[tsv_only['Gene'] != '']
 
             if len(no_annotation_only.index) > 0:
+                # some variants from tsv with no annotation, add to df with
+                # sample ID as first column
                 sample_col = [Path(tsv).name.split('_')[0]] * len(no_annotation_only.index)
                 no_annotation_only.insert(0, 'Sample', sample_col)
-                all_tsv_no_annotation = pd.concat([all_tsv_no_annotation, no_annotation_only])
+                all_tsv_no_annotation = pd.concat(
+                    [all_tsv_no_annotation, no_annotation_only])
 
 
             if len(tsv_only.index) > 0:
+                # some variants only in the tsv, add to df with
+                # sample ID as first column
                 sample_col = [Path(tsv).name.split('_')[0]] * len(tsv_only.index)
                 tsv_only.insert(0, 'Sample', sample_col)
                 all_tsv_only = pd.concat([all_tsv_only, tsv_only])
 
             if len(vcf_only.index) > 0:
+                # some variants only in our vcf
                 sample_col = [Path(tsv).name.split('_')[0]] * len(vcf_only.index)
                 vcf_only.insert(0, 'SAMPLE', sample_col)
                 all_vcf_only = pd.concat([all_vcf_only, vcf_only])
@@ -219,27 +268,30 @@ def main():
 
         runs += 1
 
-        print(f"\n\nTotal tsv mismatch: {len(all_tsv_only.index)}")
-        print(f"Total vcf mismatch: {len(all_vcf_only.index)}\n")
+        print(f"\nTotal tsv mismatch for run {run_name}: {len(all_tsv_only.index)}")
+        print(f"Total vcf mismatch for run {run_name}: {len(all_vcf_only.index)}\n\n")
 
         if len(all_tsv_only.index) > 0:
             all_tsv_issues += len(all_tsv_only.index)
-            print(f"{all_tsv_only}\n")
+            # print(f"{all_tsv_only}\n")
             all_tsv_only.to_csv(
-                'all_tsv_only.tsv', mode='a', sep='\t', index=False, header=False
+                f'{run_name}_all_tsv_only.tsv', mode='w',
+                sep='\t', index=False, header=False
             )
 
         if len(all_vcf_only.index) > 0:
-            print(f"{all_vcf_only}\n")
+            # print(f"{all_vcf_only}\n")
             all_vcf_issues += len(all_vcf_only.index)
             all_vcf_only.to_csv(
-                'all_vcf_only.tsv', mode='a', sep='\t', index=False, header=False
+                f'{run_name}_all_vcf_only.tsv', mode='w',
+                sep='\t', index=False, header=False
             )
 
         if len(all_tsv_no_annotation.index) > 0:
             all_no_annotation_issues += len(all_tsv_no_annotation.index)
             all_tsv_no_annotation.to_csv(
-                'all_tsv_no_annotation.tsv', mode='a', sep='\t', index=False, header=False
+                f'{run_name}_all_tsv_no_annotation.tsv', mode='w',
+                sep='\t', index=False, header=False
             )
 
     print(f"Total samples checked: {samples}")
