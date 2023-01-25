@@ -1,6 +1,6 @@
 # TSO500 CombinedVariantOutput tsv vs vcf check
 
-Script to compare VCFs against TSO500 CombinedVariantOutput tsvs files. This is to find any differences in variant calls between the tsv and vcf, and output 2 separate files detailing any variants present only in either the vcf or tsv for a given run of samples.
+Script to compare VCFs against TSO500 CombinedVariantOutput tsvs files. This is to find any differences in variant calls between the tsv and vcf, and output 3 separate files detailing any variants present only in either the vcf or tsv for a given run of samples.
 
 This expects to take a path to a directory of directories as input, which each sub directory being for a run and containing all tsvs and vcfs to compare.
 
