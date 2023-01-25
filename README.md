@@ -5,7 +5,7 @@ Script to compare VCFs against TSO500 CombinedVariantOutput tsvs files. This is 
 This expects to take a path to a directory of directories as input, which each sub directory being for a run and containing all tsvs and vcfs to compare.
 
 ```
-# example of dir containing 1 dir of run files
+# example of dir containing dirs of run files
 $ tree /tmp/tso500_reports_v1.1.0_compare/
 /tmp/tso500_reports_v1.1.0_compare/
 └── 002_230109_A01303_0138_AHKW3GDRX2_TSO500
