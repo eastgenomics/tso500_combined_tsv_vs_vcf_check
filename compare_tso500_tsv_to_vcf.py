@@ -273,14 +273,15 @@ def main():
 
         if len(all_tsv_only.index) > 0:
             all_tsv_issues += len(all_tsv_only.index)
-            # print(f"{all_tsv_only}\n")
+
+            all_tsv_only.sort_values(by=['Gene', 'POS'], inplace=True)
+
             all_tsv_only.to_csv(
                 f'{run_name}_all_tsv_only.tsv', mode='w',
                 sep='\t', index=False, header=False
             )
 
         if len(all_vcf_only.index) > 0:
-            # print(f"{all_vcf_only}\n")
             all_vcf_issues += len(all_vcf_only.index)
             all_vcf_only.to_csv(
                 f'{run_name}_all_vcf_only.tsv', mode='w',
