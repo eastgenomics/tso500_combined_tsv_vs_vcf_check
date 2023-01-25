@@ -29,14 +29,12 @@ $ tree /tmp/tso500_reports_v1.1.0_compare/
     └── MB5286_CombinedVariantOutput.tsv
 └── 002_230119_A01303_0142_BHVLMWDRX2_TSO500
     ├── ....
-```
 
 
-# run comparison
+# run comparison script
 $ python3 compare_tso500_tsv_to_vcf.py /tmp/tso500_reports_v1.1.0_compare/
 
 # files output from comparing 2 runs
-```
 {run_id}_all_tsv_only.tsv
 {run_id}_all_vcf_only.tsv
 {run_id}_all_tsv_no_annotation.tsv
