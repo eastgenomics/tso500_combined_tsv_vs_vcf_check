@@ -177,6 +177,8 @@ def main():
     all_tsv_issues = 0
     all_vcf_issues = 0
     all_no_annotation_issues = 0
+    total_vcf_variants = 0
+    total_tsv_variants = 0
 
     for run_dir in os.listdir(all_runs_dir):
         run_dir = os.path.join(all_runs_dir, run_dir)
@@ -228,6 +230,15 @@ def main():
             tsv_df = read_tsv(tsv)
             vcf_df = read_vcf(vcf)
 
+            # remove variants with no annotation => weird Illumina variants
+            # add these to their own dataframe to dump out at the end
+            no_annotation_only = tsv_df[tsv_df['Gene'] == '']
+            tsv_df = tsv_df[tsv_df['Gene'] != '']
+
+            # add count of everything we're comparing for the end
+            total_vcf_variants += len(vcf_df.index)
+            total_tsv_variants += len(tsv_df.index)
+
             tsv_only, vcf_only = get_mismatch_variants(tsv_df, vcf_df)
 
             # get any rows only in VCF AND not rescued in rescue app as
@@ -236,11 +247,6 @@ def main():
             # v1.1.0 reports workflow => tagged 'rescued'
             vcf_only = vcf_only[~vcf_only['FILTER'].str.contains('OPA')]
             vcf_only = vcf_only[~vcf_only['FILTER'].str.contains('rescued')]
-
-            # remove variants with no annotation => weird Illumina variants
-            # add these to their own dataframe to dump out at the end
-            no_annotation_only = tsv_only[tsv_only['Gene'] == '']
-            tsv_only = tsv_only[tsv_only['Gene'] != '']
 
             if len(no_annotation_only.index) > 0:
                 # some variants from tsv with no annotation, add to df with
@@ -276,27 +282,29 @@ def main():
 
             all_tsv_only.sort_values(by=['Gene', 'POS'], inplace=True)
 
-            all_tsv_only.to_csv(
-                f'{run_name}_all_tsv_only.tsv', mode='w',
-                sep='\t', index=False, header=False
-            )
+            # all_tsv_only.to_csv(
+            #     f'{run_name}_all_tsv_only.tsv', mode='w',
+            #     sep='\t', index=False, header=False
+            # )
 
         if len(all_vcf_only.index) > 0:
             all_vcf_issues += len(all_vcf_only.index)
-            all_vcf_only.to_csv(
-                f'{run_name}_all_vcf_only.tsv', mode='w',
-                sep='\t', index=False, header=False
-            )
+            # all_vcf_only.to_csv(
+            #     f'{run_name}_all_vcf_only.tsv', mode='w',
+            #     sep='\t', index=False, header=False
+            # )
 
         if len(all_tsv_no_annotation.index) > 0:
             all_no_annotation_issues += len(all_tsv_no_annotation.index)
-            all_tsv_no_annotation.to_csv(
-                f'{run_name}_all_tsv_no_annotation.tsv', mode='w',
-                sep='\t', index=False, header=False
-            )
+            # all_tsv_no_annotation.to_csv(
+            #     f'{run_name}_all_tsv_no_annotation.tsv', mode='w',
+            #     sep='\t', index=False, header=False
+            # )
 
     print(f"Total samples checked: {samples}")
     print(f"Total runs checked: {runs}")
+    print(f"Total variants from vcfs checked: {total_vcf_variants}")
+    print(f"Total variants from tsvs checked: {total_tsv_variants}")
     print(f"Total tsv mismatch: {all_tsv_issues}")
     print(f"Total vcf mismatch: {all_vcf_issues}")
     print(f"Total tsv variants w/ no annotation: {all_no_annotation_issues}")
